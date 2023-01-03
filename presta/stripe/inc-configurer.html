@@ -1,5 +1,19 @@
 <ul class="editer-groupe">
-	#SET{name,#ENV{casier,''}_nom_}#SET{obli,''}#SET{defaut,''}#SET{erreurs,#ENV**{erreurs}|table_valeur{#GET{name}}}
+    #SET{name,#ENV{casier,''}_FRAIS_FIXE}#SET{obli,''}#SET{defaut,''}#SET{erreurs,#ENV**{erreurs}|table_valeur{#GET{name}}}
+	<li class="editer editer_[(#GET{name})][ (#GET{obli})][ (#GET{erreurs}|oui)erreur]">
+		<label for="#GET{name}"><:bank:frais_fixe_stripe:></label>[
+		<span class='erreur_message'>(#GET{erreurs})</span>
+		]<input type="text" name="#ENV{casier,''}[FRAIS_FIXE]" class="text" value="[(#ENV*{#ENV{casier,''}}|table_valeur{FRAIS_FIXE,#GET{defaut}})]" id="#GET{name}" placeholder='' />
+	</li>
+<!--    #SET{name,#ENV{casier,''}_FRAIS_POURCENTAGE}#SET{obli,''}#SET{defaut,''}#SET{erreurs,#ENV**{erreurs}|table_valeur{#GET{name}}}
+	<li class="editer editer_[(#GET{name})][ (#GET{obli})][ (#GET{erreurs}|oui)erreur]">
+		<label for="#GET{name}"><:bank:frais_variable_stripe:></label>[
+		<span class='erreur_message'>(#GET{erreurs})</span>
+		]<input type="text" name="#ENV{casier,''}[FRAIS_POURCENTAGE]" class="text" value="[(#ENV*{#ENV{casier,''}}|table_valeur{FRAIS_POURCENTAGE,#GET{defaut}})]" id="#GET{name}" placeholder='' />
+            <p class="explication"><:bank:frais_variable_stripe_explication:></p>
+	</li>
+        -->
+    #SET{name,#ENV{casier,''}_nom_}#SET{obli,''}#SET{defaut,''}#SET{erreurs,#ENV**{erreurs}|table_valeur{#GET{name}}}
 	<li class="editer editer_[(#GET{name})][ (#GET{obli})][ (#GET{erreurs}|oui)erreur]">
 		<label for="#GET{name}"><:bank:label_configuration_nom_compte:></label>[
 		<span class='erreur_message'>(#GET{erreurs})</span>

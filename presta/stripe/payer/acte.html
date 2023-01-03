@@ -11,8 +11,24 @@
 */
 ]#CACHE{0}
 <BOUCLE_trans(TRANSACTIONS){id_transaction}{transaction_hash}>
+        #SET{frais_fixe,#ENV{config/FRAIS_FIXE}}
+    #SET{frais_variable,#ENV{config/FRAIS_POURCENTAGE}}
+    [(#SET{montant_frais_variable,#MONTANT|mult{#GET{frais_variable}|div{100}}})]      
+    [(#SET{montant_frais,#GET{frais_fixe,0}|plus{#GET{montant_frais_variable,0}}})]     
+    [(#SET{montant_total,#MONTANT|plus{#GET{montant_frais}}})]
+
+    
   <div class="payer_mode payer_stripe payer_acte">
 	  <h4 class="titre h4">[(#ENV{payer_par_title,<:bank:payer_par_carte_bancaire:>})]</h4>
+          	     <p>
+        <:bank:info_stripe_imprimer:><br><br>       
+        <b><:bank:montant_a_regler:></b> [(#GET{montant_total}|number_format{2})][ (#CONFIG{bank_paiement/devise})][(*)<br>
+               (#GET{montant_frais}!={0}|oui)
+       <br>
+         [*(#GET{montant_frais}|number_format{2})][ (#CONFIG{bank_paiement/devise})]<:bank:payer_avec_stripe_frais_explication:>           
+            ]
+    </p>
+            
 	  [<p class="explication">(#ENV{config/presta}|bank_explication_mode_paiement)</p>]
 	  <div class='boutons[ (#ENV{autosubmit}|?{loading})]'>
 		  [(#SET{texte,<:bank:payer_par_carte_bancaire:>})]

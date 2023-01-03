@@ -15,7 +15,8 @@ if (!defined('_ECRIRE_INC_VERSION')){
 
 
 include_spip('presta/stripe/inc/stripe');
-
+include_spip('inc/filtres');
+include_spip('inc/filtres_mini'); // url_absolue
 /**
  * Preparation de la requete par cartes
  * il faut avoir un id_transaction et un transaction_hash coherents
@@ -70,6 +71,36 @@ function presta_stripe_call_request_dist($id_transaction, $transaction_hash, $co
 		);
 	}
 
+    /*AJOUT BLOBUL*/
+    //PREPARATION DES INFOS LIES AUX ADHESIONS
+    if ($query_asso_comptes = sql_fetsel("id_categorie,id_auteur,reinscription", "spip_asso_comptes", "id_transaction=" . intval($id_transaction))){
+        $id_categorie = $query_asso_comptes['id_categorie'];   
+        $id_auteur = $query_asso_comptes['id_auteur'];   
+        $query_categorie = sql_fetsel("*", "spip_asso_categories_adherents", "id_categorie=" . intval($id_categorie));        
+        $titre_categorie = $query_categorie['valeur'];   
+        
+        $reinscription = ($query_asso_comptes['reinscription'] == 'inscription') ? 'Adhésion à l\'association' : 'Réadhésion à l\'association';
+        $query_auteur = sql_fetsel("nom_famille,prenom,email", "spip_auteurs", "id_auteur=" . intval($id_auteur));     
+        $description_acheteur = $query_auteur['nom_famille'] . ' ' . $query_auteur['prenom']; 
+        
+        
+        $libelle_transaction = 'ADH' . $id_auteur .'TRA'. $id_transaction . ' - ' . $reinscription;
+        $description_transaction = $description_acheteur . ' - ' . $titre_categorie ;      
+    }   
+    //PREPARATION DES INFOS LIES AUX ACTIVITES
+    if ($query_activite = sql_fetsel("id_activite,id_evenement,email_inscrit,nom_inscrit,prenom_inscrit", "spip_asso_activites", "id_transaction=" . intval($id_transaction))){
+        $id_activite = $query_activite['id_activite'];   
+        $query_evenement = sql_fetsel("*", "spip_evenements", "id_evenement=" . intval($query_activite['id_evenement']));        
+        $titre_evenement = supprimer_numero($query_evenement['titre']) . ' - ' . affdate($query_evenement['date_debut'],"d/m/Y");        
+        
+        $description_acheteur = $query_activite['nom_inscrit'] . ' ' . $query_activite['prenom_inscrit']; 
+        
+        $libelle_transaction = 'ACT' . $id_activite . 'TRA' . $id_transaction . ' - Inscription à un événement' ;      
+        $description_transaction = $description_acheteur . ' - ' . $titre_evenement;        
+        
+        
+    }
+    
 	// si c'est un abonnement, verifier qu'on saura le traiter vu les limitations de Stripe
 	// c'est un abonnement
 	$echeance = null;
@@ -106,14 +137,31 @@ function presta_stripe_call_request_dist($id_transaction, $transaction_hash, $co
 		}
 
 	}
-
-	$billing = bank_porteur_infos_facturation($row);
-	$email = $billing['email'];
+    /* ------------------------------------------------------------- 
+        Modification BLOBUL pour régler le soucis des transactions 
+        liés à des internautes n'ayant pas de compte sur le site 
+    /* ------------------------------------------------------------- */
+    /*On vérifie si il s'agit d'une inscription à un événement et si la personne est authentifié ou pas.  */        
+    if(isset($id_activite)){
+        $billing = bank_porteur_infos_facturation($row);
+        $email = $query_activite['email_inscrit'] ;
+    }else{           
+        $billing = bank_porteur_infos_facturation($row);    
+        $email = $billing['email'];    
+    }
+/*	$billing = bank_porteur_infos_facturation($row);
+	$email = $billing['email'];*/
 
 	// passage en centimes d'euros : round en raison des approximations de calcul de PHP
-	$montant = bank_formatter_montant_selon_fraction($row['montant'], $devise_info['fraction'], 3);
+    $montant_brut = $row['montant'];
+    if (!empty($config['FRAIS_FIXE'])){
+        $montant_total = $montant_brut + $config['FRAIS_FIXE'];
+    }else{
+        $montant_total = $montant_brut ;
+    }
+	$montant = bank_formatter_montant_selon_fraction($montant_total, $devise_info['fraction'], 3);
 
-	include_spip('inc/filtres_mini'); // url_absolue
+
 
 	$contexte = array(
 		'id_transaction' => $id_transaction,
@@ -141,7 +189,21 @@ function presta_stripe_call_request_dist($id_transaction, $transaction_hash, $co
 	$contexte['image'] = find_in_path('img/logo-paiement-stripe.png');
 
 	$description = bank_description_transaction($id_transaction, $row);
+    
+    /*AJOUT BLOBUL*/
+    $contexte['description'] = !empty($description_transaction) ? $description_transaction : $description['description'];
 	$item = [
+		'name' => $contexte['name'],
+		'description' => $contexte['description'],
+		'amount' => $contexte['amount'],
+		'currency' => $contexte['currency'],
+		'quantity' => 1,
+		'metadata' => [
+			'id_transaction' => $id_transaction,
+			'transaction_hash' => $transaction_hash,
+		],
+	];
+/*	$item = [
 		'name' => empty($description['libelle']) ? null : $description['libelle'], // mandatory, erreur si null fournit
 		'description' => empty($description['description']) ? null : $description['description'], // erreur si chaine vide fourni, il faut mieux passer un null
 		'amount' => $contexte['amount'],
@@ -151,7 +213,7 @@ function presta_stripe_call_request_dist($id_transaction, $transaction_hash, $co
 			'id_transaction' => $id_transaction,
 			'transaction_hash' => $transaction_hash,
 		],
-	];
+	];*/
 
 	if (!$contexte['image']){
 		$chercher_logo = charger_fonction('chercher_logo', 'inc');

@@ -14,8 +14,8 @@ if (!defined('_ECRIRE_INC_VERSION')){
 }
 
 include_spip('inc/bank');
-
-
+include_spip('inc/filtres');
+include_spip('inc/filtres_mini'); // url_absolue
 /**
  * Liste des cartes moyens de paiement possibles selon la config
  * @param $config
@@ -430,13 +430,57 @@ function stripe_traite_reponse_transaction($config, &$response){
 	// update payment informations for Stripe Dashboard
 	// after billing
 	try {
-		$description = bank_description_transaction($id_transaction);
+        /*AJOUT BLOBUL*/        
+        //IL SEMBLE QUE CETTE PARTIE RESET LE DESCRIPTIF DE LA TRANSACTION
+/*		$description = bank_description_transaction($id_transaction);
 		$description = array_filter([$description['libelle'], $description['description']]);
 		$description = implode(" | ", $description);
 		$description = str_replace("\n", " ", $description);
 		$description = str_replace("\r", " ", $description);
 		$nom_site = bank_nom_site();
-		$description .= " [$nom_site]";
+		$description .= " [$nom_site]";*/
+        
+        
+        //CODE PERSO 03/01/2023
+                
+    //PREPARATION DES INFOS LIES AUX ADHESIONS
+    if ($query_asso_comptes = sql_fetsel("id_categorie,id_auteur,reinscription", "spip_asso_comptes", "id_transaction=" . intval($id_transaction))){
+        $id_categorie = $query_asso_comptes['id_categorie'];   
+        $id_auteur = $query_asso_comptes['id_auteur'];   
+        $query_categorie = sql_fetsel("*", "spip_asso_categories_adherents", "id_categorie=" . intval($id_categorie));        
+        $titre_categorie = $query_categorie['valeur'];   
+        
+        $reinscription = ($query_asso_comptes['reinscription'] == 'inscription') ? 'Adhésion à l\'association' : 'Réadhésion à l\'association';
+        $query_auteur = sql_fetsel("nom_famille,prenom,email", "spip_auteurs", "id_auteur=" . intval($id_auteur));     
+        $description_acheteur = $query_auteur['nom_famille'] . ' ' . $query_auteur['prenom']; 
+        
+        
+        $libelle_transaction = 'ADH' . $id_auteur .'TRA'. $id_transaction . ' - ' . $reinscription;
+        $description_transaction = $description_acheteur . ' - ' . $titre_categorie ;      
+    }   
+    //PREPARATION DES INFOS LIES AUX ACTIVITES
+    if ($query_activite = sql_fetsel("id_activite,id_evenement,email_inscrit,nom_inscrit,prenom_inscrit", "spip_asso_activites", "id_transaction=" . intval($id_transaction))){
+        $id_activite = $query_activite['id_activite'];   
+        $query_evenement = sql_fetsel("*", "spip_evenements", "id_evenement=" . intval($query_activite['id_evenement']));        
+        $titre_evenement = supprimer_numero($query_evenement['titre']) . ' - ' . affdate($query_evenement['date_debut'],"d/m/Y");        
+        
+        $description_acheteur = $query_activite['nom_inscrit'] . ' ' . $query_activite['prenom_inscrit']; 
+        
+        $libelle_transaction = 'ACT' . $id_activite . 'TRA' . $id_transaction . ' - Inscription à un événement' ;      
+        $description_transaction = $description_acheteur . ' - ' . $titre_evenement;      
+        
+        
+    }
+    $contexte['description'] = _T('bank:titre_transaction') . '#' . $id_transaction;
+	$contexte['image'] = find_in_path('img/logo-paiement-stripe.png');
+	$description = bank_description_transaction($id_transaction, $row);
+    
+    $description_transaction = !empty($description_transaction) ? $description_transaction : $description['description'];
+        
+    $description = $description_transaction;
+        
+        /*FIN DU CODE PERSO*/
+        
 		$payment->description = $description;
 		$metadata = $payment->metadata;
 		if (!$metadata){
